@@ -1,6 +1,8 @@
--- Restaurant Management System 
+-- ============================================
+-- Restaurant Management System - PostgreSQL Setup Script
+-- ============================================
 
--- 1. DROP existing tables (if any) to start from a clean slate
+-- Drop tables if they exist
 DROP TABLE IF EXISTS OrderItems CASCADE;
 DROP TABLE IF EXISTS AppliedPromotion CASCADE;
 DROP TABLE IF EXISTS Promotion CASCADE;
@@ -13,18 +15,16 @@ DROP TABLE IF EXISTS MenuItem CASCADE;
 DROP TABLE IF EXISTS Restaurant CASCADE;
 DROP TABLE IF EXISTS Customer CASCADE;
 
--- 2. CREATE TABLES
+-- CREATE TABLES
 
--- 2.1 Customer: holds customer info
 CREATE TABLE Customer (
-    CustomerID SERIAL PRIMARY KEY,       -- Unique customer ID
-    Name VARCHAR(100) NOT NULL,          -- Customer name
-    Email VARCHAR(100) UNIQUE NOT NULL,  -- Unique email address
-    Phone VARCHAR(15) UNIQUE NOT NULL,   -- Unique phone number
-    Address VARCHAR(255) NOT NULL        -- Delivery address
+    CustomerID SERIAL PRIMARY KEY,       
+    Name VARCHAR(100) NOT NULL,          
+    Email VARCHAR(100) UNIQUE NOT NULL,  
+    Phone VARCHAR(15) UNIQUE NOT NULL,   
+    Address VARCHAR(255) NOT NULL        
 );
 
--- 2.2 Restaurant: lists partner restaurants
 CREATE TABLE Restaurant (
     RestaurantID SERIAL PRIMARY KEY,
     Name VARCHAR(100) NOT NULL,
@@ -32,38 +32,34 @@ CREATE TABLE Restaurant (
     Phone VARCHAR(15) NOT NULL
 );
 
--- 2.3 MenuItem: items offered by each restaurant
 CREATE TABLE MenuItem (
-    ItemID SERIAL,                       -- Auto-incrementing item ID
-    RestaurantID INT NOT NULL,           -- Link to Restaurant
+    ItemID SERIAL,                       
+    RestaurantID INT NOT NULL,           
     Name VARCHAR(100) NOT NULL,
     Description TEXT,
-    Price NUMERIC(10,2) NOT NULL CHECK (Price >= 0),  -- Non-negative price
+    Price NUMERIC(10,2) NOT NULL CHECK (Price >= 0),  
     PRIMARY KEY (ItemID, RestaurantID),
     FOREIGN KEY (RestaurantID) REFERENCES Restaurant(RestaurantID)
 );
 
--- 2.4 Orders: records customer orders
 CREATE TABLE Orders (
     OrderID SERIAL PRIMARY KEY,
-    CustomerID INT NOT NULL,             -- Link to Customer
+    CustomerID INT NOT NULL,             
     OrderDate DATE DEFAULT CURRENT_DATE,
     Status VARCHAR(20) CHECK (Status IN ('Pending','Preparing','Out for Delivery','Completed','Canceled')),
     TotalPrice NUMERIC(10,2) NOT NULL CHECK (TotalPrice >= 0),
     FOREIGN KEY (CustomerID) REFERENCES Customer(CustomerID)
 );
 
--- 2.5 Payment: tracks payments for orders
 CREATE TABLE Payment (
     PaymentID SERIAL PRIMARY KEY,
-    OrderID INT NOT NULL,                -- Link to Orders
+    OrderID INT NOT NULL,                
     PaymentMethod VARCHAR(50) NOT NULL CHECK (PaymentMethod IN ('Card','PayPal','Apple Pay','Other')),
     Amount NUMERIC(10,2) NOT NULL CHECK (Amount >= 0),
     Status VARCHAR(20) CHECK (Status IN ('Success','Failed','Refunded')),
     FOREIGN KEY (OrderID) REFERENCES Orders(OrderID)
 );
 
--- 2.6 DeliveryDriver: delivery personnel info
 CREATE TABLE DeliveryDriver (
     DriverID SERIAL PRIMARY KEY,
     Name VARCHAR(100) NOT NULL,
@@ -71,11 +67,10 @@ CREATE TABLE DeliveryDriver (
     VehicleType VARCHAR(50)
 );
 
--- 2.7 Delivery: logs pickups and drop-offs
 CREATE TABLE Delivery (
     DeliveryID SERIAL PRIMARY KEY,
-    OrderID INT NOT NULL,                -- Link to Orders
-    DriverID INT NOT NULL,               -- Link to Driver
+    OrderID INT NOT NULL,               
+    DriverID INT NOT NULL,               
     PickupTime TIMESTAMP,
     DeliveryTime TIMESTAMP,
     Status VARCHAR(20) CHECK (Status IN ('In Transit','Delivered','Failed')),
@@ -83,13 +78,12 @@ CREATE TABLE Delivery (
     FOREIGN KEY (DriverID) REFERENCES DeliveryDriver(DriverID)
 );
 
--- 2.8 Review: stores ratings and comments
 CREATE TABLE Review (
     ReviewID SERIAL PRIMARY KEY,
     CustomerID INT NOT NULL,
     RestaurantID INT NOT NULL,
     DriverID INT NOT NULL,
-    Rating INT CHECK (Rating BETWEEN 1 AND 5),  -- 1 to 5
+    Rating INT CHECK (Rating BETWEEN 1 AND 5),  
     ReviewComment TEXT,
     ReviewDate DATE DEFAULT CURRENT_DATE,
     ReviewType VARCHAR(20) CHECK (ReviewType IN ('R','D')),  -- R=Restaurant, D=Driver
@@ -98,7 +92,6 @@ CREATE TABLE Review (
     FOREIGN KEY (DriverID) REFERENCES DeliveryDriver(DriverID)
 );
 
--- 2.9 Promotion: discount campaigns
 CREATE TABLE Promotion (
     PromoID SERIAL PRIMARY KEY,
     RestaurantID INT NOT NULL,
@@ -108,7 +101,6 @@ CREATE TABLE Promotion (
     FOREIGN KEY (RestaurantID) REFERENCES Restaurant(RestaurantID)
 );
 
--- 2.10 AppliedPromotion: links customers to promos
 CREATE TABLE AppliedPromotion (
     CustomerID INT NOT NULL,
     PromoID INT NOT NULL,
@@ -118,7 +110,6 @@ CREATE TABLE AppliedPromotion (
     FOREIGN KEY (PromoID) REFERENCES Promotion(PromoID)
 );
 
--- 2.11 OrderItems: breakdown of items per order
 CREATE TABLE OrderItems (
     OrderID INT NOT NULL,
     ItemID INT NOT NULL,
@@ -129,7 +120,7 @@ CREATE TABLE OrderItems (
     FOREIGN KEY (ItemID,RestaurantID) REFERENCES MenuItem(ItemID,RestaurantID)
 );
 
--- 3. INSERT sample data into main tables
+-- INSERT SAMPLE DATA into main tables
 
 -- 3.1 Customers
 INSERT INTO Customer (Name,Email,Phone,Address) VALUES
@@ -252,7 +243,7 @@ INSERT INTO Promotion (RestaurantID,DiscountPercentage,StartDate,EndDate) VALUES
 INSERT INTO AppliedPromotion (CustomerID,PromoID) VALUES
 (1,1),(2,2),(3,3),(4,4),(5,5);
 
--- 4. CREATE STORED PROCEDURES & FUNCTIONS
+-- 4. STORED PROCEDURES & FUNCTIONS
 
 -- 4.1 Update delivery status and set DeliveryTime when completed
 CREATE OR REPLACE PROCEDURE UpdateDeliveryStatus(
@@ -317,9 +308,9 @@ BEGIN
     RETURN COALESCE(avg_rating,0.00);
 END;$$;
 
--- 5. CREATE TRIGGERS & AUDIT LOGS
+-- 5. TRIGGERS & LOGGING
 
--- 5.1 Log deleted orders
+-- Deleted orders log
 CREATE TABLE IF NOT EXISTS DeletedOrdersLog (
     LogID SERIAL PRIMARY KEY,
     OrderID INT,
@@ -334,7 +325,7 @@ CREATE OR REPLACE FUNCTION log_deleted_order() RETURNS TRIGGER LANGUAGE plpgsql 
 END;$$;
 CREATE TRIGGER trg_log_order_delete AFTER DELETE ON Orders FOR EACH ROW EXECUTE FUNCTION log_deleted_order();
 
--- 5.2 Update order status on payment success
+-- Payment success updates order status
 CREATE OR REPLACE FUNCTION update_order_on_payment() RETURNS TRIGGER LANGUAGE plpgsql AS $$BEGIN
     IF NEW.Status = 'Success' THEN
         UPDATE Orders SET Status='Completed' WHERE OrderID=NEW.OrderID;
@@ -343,7 +334,7 @@ CREATE OR REPLACE FUNCTION update_order_on_payment() RETURNS TRIGGER LANGUAGE pl
 END;$$;
 CREATE TRIGGER trg_update_order_on_payment AFTER INSERT ON Payment FOR EACH ROW EXECUTE FUNCTION update_order_on_payment();
 
--- 5.3 Audit customer contact changes
+-- Customer audit log
 CREATE TABLE IF NOT EXISTS CustomerAudit (
     AuditID SERIAL PRIMARY KEY,
     CustomerID INT,
@@ -360,16 +351,15 @@ CREATE TRIGGER trg_customer_update_log BEFORE UPDATE ON Customer
 FOR EACH ROW WHEN (OLD.Phone IS DISTINCT FROM NEW.Phone OR OLD.Email IS DISTINCT FROM NEW.Email)
 EXECUTE FUNCTION log_customer_update();
 
--- 5.4 Zero out refunded payments
+-- Zero refunded payments
 CREATE OR REPLACE FUNCTION zero_refund_amount() RETURNS TRIGGER LANGUAGE plpgsql AS $$BEGIN
     IF NEW.Status='Refunded' THEN NEW.Amount:=0; END IF;
     RETURN NEW;
 END;$$;
 CREATE TRIGGER trg_zero_payment_on_refund BEFORE UPDATE ON Payment FOR EACH ROW EXECUTE FUNCTION zero_refund_amount();
 
--- 6. CREATE VIEWS for reporting
+-- VIEWS 
 
--- 6.1 Completed orders with successful payments
 CREATE VIEW CompletedOrdersWithSuccessfulPayments AS
 SELECT o.OrderID, o.CustomerID, c.Name AS CustomerName, o.OrderDate, o.TotalPrice, p.PaymentMethod, p.Amount
 FROM Orders o
@@ -377,7 +367,6 @@ JOIN Payment p ON o.OrderID=p.OrderID
 JOIN Customer c ON o.CustomerID=c.CustomerID
 WHERE o.Status='Completed' AND p.Status='Success';
 
--- 6.2 Driver delivery stats
 CREATE VIEW DriverDeliveryStats AS
 SELECT dd.DriverID, dd.Name AS DriverName,
     COUNT(*) AS TotalDeliveries,
@@ -388,11 +377,9 @@ FROM Delivery d
 JOIN DeliveryDriver dd ON d.DriverID=dd.DriverID
 GROUP BY dd.DriverID,dd.Name;
 
--- 6.3 Updatable customer view
 CREATE VIEW BasicCustomerView AS
 SELECT CustomerID,Name,Email,Phone FROM Customer;
 
--- 6.4 Restaurant average ratings
 CREATE VIEW RestaurantAverageRatings AS
 SELECT r.RestaurantID, r.Name AS RestaurantName,
     ROUND(AVG(rv.Rating),2) AS AverageRating,
